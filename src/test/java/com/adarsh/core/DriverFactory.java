@@ -5,9 +5,12 @@ import java.net.MalformedURLException;
 import java.net.URI;
 import java.net.URL;
 import java.time.Duration;
+import java.util.logging.Level;
 import org.openqa.selenium.Dimension;
 import org.openqa.selenium.MutableCapabilities;
 import org.openqa.selenium.WebDriver;
+import org.openqa.selenium.logging.LogType;
+import org.openqa.selenium.logging.LoggingPreferences;
 import org.openqa.selenium.chrome.ChromeDriver;
 import org.openqa.selenium.chrome.ChromeOptions;
 import org.openqa.selenium.edge.EdgeDriver;
@@ -28,13 +31,40 @@ public final class DriverFactory {
 
     private static final Logger log = LoggerFactory.getLogger(DriverFactory.class);
 
+    /**
+     * Browser chosen for this thread, overriding the configured one.
+     *
+     * <p>Exists so a suite can run the same scenarios against several browsers at once. The
+     * configured {@code -Dbrowser} is a single JVM-wide value, so a suite XML with one
+     * {@code <test>} per browser would otherwise run the same browser three times and look like it
+     * worked. {@code BrowserParameterListener} seeds this from the {@code <test>} block's
+     * {@code browser} parameter on the thread that is about to run the scenario.
+     */
+    private static final ThreadLocal<BrowserType> BROWSER_OVERRIDE = new ThreadLocal<>();
+
     private DriverFactory() {
         // utility holder
     }
 
+    /** Pins this thread to a browser for the scenario it is about to run. */
+    public static void overrideBrowser(BrowserType browser) {
+        BROWSER_OVERRIDE.set(browser);
+    }
+
+    /**
+     * Releases the pin.
+     *
+     * <p>Must be called when the invocation ends: TestNG reuses pool threads, so a leftover value
+     * would hand the wrong browser to whatever scenario lands on this thread next.
+     */
+    public static void clearBrowserOverride() {
+        BROWSER_OVERRIDE.remove();
+    }
+
     static WebDriver create() {
         var config = ConfigReader.get();
-        var browser = BrowserType.from(config.browser());
+        var override = BROWSER_OVERRIDE.get();
+        var browser = override != null ? override : BrowserType.from(config.browser());
         var target = ExecutionTarget.from(config.execution());
 
         log.info("Creating {} driver for execution target {}", browser, target);
@@ -105,6 +135,7 @@ public final class DriverFactory {
         options.addArguments("--remote-allow-origins=*");
         options.addArguments("--disable-notifications");
         options.setPageLoadTimeout(ConfigReader.pageLoadTimeout());
+        enableBrowserLogging(options);
         return options;
     }
 
@@ -126,7 +157,24 @@ public final class DriverFactory {
         options.addArguments("--no-sandbox");
         options.addArguments("--disable-dev-shm-usage");
         options.setPageLoadTimeout(ConfigReader.pageLoadTimeout());
+        enableBrowserLogging(options);
         return options;
+    }
+
+    /**
+     * Turns on browser-side console logging so a failure can be diagnosed with the JavaScript
+     * errors the page actually produced, not just a screenshot of the aftermath.
+     *
+     * <p>Chromium only. Without the {@code goog:loggingPrefs} capability set here,
+     * {@code driver.manage().logs().get(LogType.BROWSER)} returns an empty list rather than
+     * failing, so the evidence in the report would silently be blank. Firefox exposes no
+     * equivalent over W3C WebDriver - console capture there needs BiDi, which is why the
+     * console-log scenarios are tagged for a Chromium browser.
+     */
+    private static void enableBrowserLogging(MutableCapabilities options) {
+        var logging = new LoggingPreferences();
+        logging.enable(LogType.BROWSER, Level.ALL);
+        options.setCapability("goog:loggingPrefs", logging);
     }
 
     private static void applyCommonSettings(WebDriver driver) {

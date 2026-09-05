@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE suite SYSTEM "https://testng.org/testng-1.0.dtd">
+
+<!--
+  Regression suite - the nightly full run.
+
+  Two <test> blocks, deliberately ordered. TestNG executes them top to bottom, so the browserless
+  unit tests act as a pre-flight check: if a domain record's invariants are broken there is no
+  point spending twenty minutes of browser time discovering it through the UI.
+
+  Invoked by:  mvn test -Pregression
+-->
+<suite name="Regression" verbose="1"
+       data-provider-thread-count="4"
+       configfailurepolicy="continue">
+
+    <!--
+      Same parallelism caveat as testng-smoke.xml: Cucumber-TestNG parallelises only through
+      BaseCucumberRunner's @DataProvider(parallel = true), so data-provider-thread-count is the
+      only knob with any effect. It applies suite-wide, which is why it sits on <suite> and not
+      on either <test>.
+
+      Listener registration lives in META-INF/services/org.testng.ITestNGListener (Section 2),
+      not here.
+    -->
+
+    <test name="Domain unit tests">
+        <!--
+          Package scanning rather than an explicit class list: a new record test is picked up the
+          day it is written instead of the day someone remembers to edit this file. TestNG ignores
+          classes in these packages that carry no @Test method, so DriverFactory and friends are
+          scanned and skipped harmlessly.
+        -->
+        <packages>
+            <package name="com.adarsh.domain"/>
+            <package name="com.adarsh.core"/>
+        </packages>
+    </test>
+
+    <test name="Regression scenarios">
+        <classes>
+            <class name="com.adarsh.runners.RegressionRunner"/>
+        </classes>
+    </test>
+</suite>

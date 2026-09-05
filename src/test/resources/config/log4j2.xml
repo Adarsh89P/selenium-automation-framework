@@ -39,8 +39,19 @@
                         <PatternLayout pattern="${pattern}"/>
                     </File>
                 </Route>
-                <!-- Anything logged outside a scenario (suite setup, driver creation). -->
-                <Route key="$${ctx:scenario}" ref="Console"/>
+                <!--
+                  Default route: anything logged outside a scenario (suite setup, driver
+                  creation, retry decisions). It must NOT point at Console - the com.adarsh
+                  logger already references Console directly, so routing here as well printed
+                  every pre-scenario line to the terminal twice.
+                -->
+                <Route key="$${ctx:scenario}">
+                    <File name="FrameworkFile"
+                          fileName="${logDir}/framework.log"
+                          append="false">
+                        <PatternLayout pattern="${pattern}"/>
+                    </File>
+                </Route>
             </Routes>
         </Routing>
     </Appenders>

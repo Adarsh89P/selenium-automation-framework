@@ -2,19 +2,17 @@ package com.adarsh.pages;
 
 import com.adarsh.config.ConfigReader;
 import com.adarsh.core.DriverManager;
+import com.adarsh.utils.WaitUtils;
 import java.time.Duration;
 import java.util.List;
-import java.util.NoSuchElementException;
 import java.util.Optional;
 import org.openqa.selenium.By;
 import org.openqa.selenium.JavascriptExecutor;
 import org.openqa.selenium.OutputType;
-import org.openqa.selenium.StaleElementReferenceException;
 import org.openqa.selenium.WebDriver;
 import org.openqa.selenium.WebElement;
 import org.openqa.selenium.support.ui.ExpectedCondition;
 import org.openqa.selenium.support.ui.ExpectedConditions;
-import org.openqa.selenium.support.ui.FluentWait;
 import org.openqa.selenium.support.ui.Select;
 import org.openqa.selenium.support.ui.WebDriverWait;
 import org.slf4j.Logger;
@@ -36,7 +34,9 @@ public abstract class BasePage {
 
     protected BasePage() {
         this.driver = DriverManager.getDriver();
-        this.wait = new WebDriverWait(driver, ConfigReader.explicitTimeout(), ConfigReader.pollingInterval());
+        // Built by WaitUtils rather than here, so timeout and polling configuration is read in
+        // one place and a page can never quietly use a different one.
+        this.wait = WaitUtils.standard();
     }
 
     /**
@@ -105,12 +105,7 @@ public abstract class BasePage {
 
     /** A wait that tolerates a mid-flight DOM swap, used for elements re-rendered by jQuery. */
     protected <T> T waitIgnoringStaleness(ExpectedCondition<T> condition) {
-        return new FluentWait<>(driver)
-                .withTimeout(ConfigReader.explicitTimeout())
-                .pollingEvery(ConfigReader.pollingInterval())
-                .ignoring(StaleElementReferenceException.class)
-                .ignoring(NoSuchElementException.class)
-                .until(condition);
+        return WaitUtils.untilTolerant(condition);
     }
 
     // ===== Actions =====

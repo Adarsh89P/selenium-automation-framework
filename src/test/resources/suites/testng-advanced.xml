@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE suite SYSTEM "https://testng.org/testng-1.0.dtd">
+
+<!--
+  Advanced suite - Selenium 4 capabilities that are not part of the release gate.
+
+  Relative locators, new-window handling, element-level screenshots, CDP network interception and
+  console-log capture. Kept out of smoke and regression for one honest reason: the CDP-based
+  scenarios bind to a Chromium DevTools protocol version and are the first thing to break when
+  Chrome updates ahead of the selenium-devtools artifact. A broken advanced suite should not be
+  able to block a release.
+
+  Invoked by:  mvn test -Padvanced
+
+  Chromium-only. Running this with -Dbrowser=firefox will fail at the CDP scenarios; Firefox
+  speaks WebDriver BiDi, not CDP.
+-->
+<suite name="Advanced" verbose="1"
+       data-provider-thread-count="2"
+       configfailurepolicy="continue">
+
+    <!--
+      Two threads rather than four. Network interception and console capture attach a CDP session
+      per browser, which is heavier than a plain WebDriver session, and these scenarios assert on
+      timing-sensitive traffic - crowding the machine makes them flaky for reasons that have
+      nothing to do with the application.
+    -->
+
+    <test name="Advanced scenarios">
+        <classes>
+            <class name="com.adarsh.runners.AdvancedRunner"/>
+        </classes>
+    </test>
+</suite>

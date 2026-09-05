@@ -1,0 +1,185 @@
+# Selenium Grid 4 - hub plus one node per browser, with optional session recording.
+#
+#   docker compose up -d --wait                 start and block until every node has registered
+#   docker compose up -d --wait --scale chrome=3  three Chrome nodes
+#   docker compose --profile video up -d --wait   add the recorders (see the note on scaling)
+#   docker compose down -v                      stop and drop the volumes
+#
+# Then point the suite at it:
+#
+#   mvn test -Dexecution=grid -Dsurefire.suiteXmlFiles=src/test/resources/suites/parallel-grid.xml
+#
+# Grid console: http://localhost:4444/ui
+#
+# Why --wait rather than a sleep
+# ------------------------------
+# A node answers its own health check seconds before it finishes registering with the hub. Start
+# the suite in that window and the first scenarios fail with "Could not start a new session" - a
+# failure that looks like a test bug and is not one. Every service below declares a health check
+# and the nodes declare `depends_on: service_healthy`, so `--wait` returns only once the hub is up
+# and the nodes are registered. That is the reason this file has health checks at all; a
+# `sleep 30` in CI is the same idea with a worse constant.
+
+services:
+
+  # ===== Hub =====
+
+  hub:
+    image: selenium/hub:4.48.0
+    container_name: selenium-hub
+    ports:
+      - "4442:4442"   # event bus, publish
+      - "4443:4443"   # event bus, subscribe
+      - "4444:4444"   # WebDriver endpoint and the Grid console
+    environment:
+      # A queued session waits this long for a free node before the hub gives up. Long enough to
+      # absorb a scaled-down grid, short enough that a genuinely stuck run does not hold CI for
+      # its full timeout.
+      SE_SESSION_REQUEST_TIMEOUT: "300"
+      SE_SESSION_RETRY_INTERVAL: "5"
+      # The hub's own view of an abandoned session. Must exceed the framework's page-load timeout
+      # or the hub will reap a session the suite still believes it owns.
+      SE_NODE_SESSION_TIMEOUT: "300"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4444/wd/hub/status"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 10s
+
+  # ===== Browser nodes =====
+  #
+  # Every node shares the same shape, so the differences are the ones that matter:
+  #   shm_size    - the container default is 64MB. Chrome and Edge both map /dev/shm for renderer
+  #                 memory and crash on heavier pages without this; it is the container-side twin
+  #                 of the --disable-dev-shm-usage flag DriverFactory already passes.
+  #   SE_NODE_MAX_SESSIONS - kept at 1. A node running several sessions shares one CPU allocation
+  #                 between them, and the resulting slowness surfaces as intermittent timeouts,
+  #                 which is the worst way for a resource limit to announce itself. Scale the
+  #                 number of nodes instead: --scale chrome=3.
+
+  chrome:
+    image: selenium/node-chrome:4.48.0
+    shm_size: 2gb
+    depends_on:
+      hub:
+        condition: service_healthy
+    environment:
+      SE_EVENT_BUS_HOST: hub
+      SE_EVENT_BUS_PUBLISH_PORT: "4442"
+      SE_EVENT_BUS_SUBSCRIBE_PORT: "4443"
+      SE_NODE_MAX_SESSIONS: "1"
+      SE_NODE_OVERRIDE_MAX_SESSIONS: "false"
+      SE_SCREEN_WIDTH: "1920"
+      SE_SCREEN_HEIGHT: "1080"
+      # No container_name and no host port: both would make --scale fail on a name collision.
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5555/status"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 10s
+
+  firefox:
+    image: selenium/node-firefox:4.48.0
+    shm_size: 2gb
+    depends_on:
+      hub:
+        condition: service_healthy
+    environment:
+      SE_EVENT_BUS_HOST: hub
+      SE_EVENT_BUS_PUBLISH_PORT: "4442"
+      SE_EVENT_BUS_SUBSCRIBE_PORT: "4443"
+      SE_NODE_MAX_SESSIONS: "1"
+      SE_NODE_OVERRIDE_MAX_SESSIONS: "false"
+      SE_SCREEN_WIDTH: "1920"
+      SE_SCREEN_HEIGHT: "1080"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5555/status"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 10s
+
+  edge:
+    image: selenium/node-edge:4.48.0
+    shm_size: 2gb
+    depends_on:
+      hub:
+        condition: service_healthy
+    environment:
+      SE_EVENT_BUS_HOST: hub
+      SE_EVENT_BUS_PUBLISH_PORT: "4442"
+      SE_EVENT_BUS_SUBSCRIBE_PORT: "4443"
+      SE_NODE_MAX_SESSIONS: "1"
+      SE_NODE_OVERRIDE_MAX_SESSIONS: "false"
+      SE_SCREEN_WIDTH: "1920"
+      SE_SCREEN_HEIGHT: "1080"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5555/status"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 10s
+
+  # ===== Session recording (opt-in) =====
+  #
+  # Behind a compose profile, so the default `docker compose up` does not pay for it. A recorder
+  # writes continuously for the life of the node, so on a long nightly run the videos are large and
+  # mostly boring; they earn their keep when a failure is not reproducible locally.
+  #
+  #   docker compose --profile video up -d --wait
+  #
+  # Honest limitation: a recorder binds to ONE node by container name, so this pairing does not
+  # survive --scale. `--scale chrome=3 --profile video` records the first Chrome node and silently
+  # ignores the other two. The two features are effectively exclusive here: scale for throughput on
+  # the nightly run, record when reproducing a specific failure. Recording a scaled grid properly
+  # needs Selenium's Dynamic Grid, which starts a container per session and is a different
+  # deployment model rather than a flag on this one.
+  #
+  # TODO: pin the video image to a dated tag once one is chosen - selenium/video publishes
+  # ffmpeg-versioned tags (selenium/video:ffmpeg-<version>-<date>) and `latest` will drift away
+  # from the 4.48.0 pin above.
+
+  chrome-video:
+    image: selenium/video:latest
+    profiles: ["video"]
+    depends_on:
+      chrome:
+        condition: service_healthy
+    environment:
+      DISPLAY_CONTAINER_NAME: chrome
+      FILE_NAME: chrome-session.mp4
+      SE_VIDEO_FILE_NAME: auto
+    volumes:
+      - ./target/videos:/videos
+
+  firefox-video:
+    image: selenium/video:latest
+    profiles: ["video"]
+    depends_on:
+      firefox:
+        condition: service_healthy
+    environment:
+      DISPLAY_CONTAINER_NAME: firefox
+      FILE_NAME: firefox-session.mp4
+      SE_VIDEO_FILE_NAME: auto
+    volumes:
+      - ./target/videos:/videos
+
+  edge-video:
+    image: selenium/video:latest
+    profiles: ["video"]
+    depends_on:
+      edge:
+        condition: service_healthy
+    environment:
+      DISPLAY_CONTAINER_NAME: edge
+      FILE_NAME: edge-session.mp4
+      SE_VIDEO_FILE_NAME: auto
+    volumes:
+      - ./target/videos:/videos
+
+# No custom network block: compose creates one per project and every service above resolves the
+# others by service name on it. Declaring a network here would add a line to read and change
+# nothing.
