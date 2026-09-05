@@ -25,6 +25,11 @@
         <testng.version>7.12.0</testng.version>
         <cucumber.version>7.34.7</cucumber.version>
         <allure.version>2.35.5</allure.version>
+        <!-- The Allure CLI is versioned independently of the Java libraries and their numbers do
+             not line up: allure-commandline has no 2.35.5. Pointing <reportVersion> at
+             ${allure.version} therefore fails report generation with "Cannot resolve allure
+             commandline dependencies" - and it fails in CI, after the suite has already run. -->
+        <allure.commandline.version>2.46.1</allure.commandline.version>
         <aspectj.version>1.9.25.1</aspectj.version>
         <log4j.version>2.26.1</log4j.version>
         <jackson.version>2.22.2</jackson.version>
@@ -44,7 +49,7 @@
         <env>dev</env>
         <headless>true</headless>
         <threads>4</threads>
-        <cucumber.tags>@smoke</cucumber.tags>
+        <cucumber.tags>@smoke and not @wip</cucumber.tags>
     </properties>
 
     <dependencies>
@@ -206,7 +211,7 @@
                 <artifactId>allure-maven</artifactId>
                 <version>${allure.maven.version}</version>
                 <configuration>
-                    <reportVersion>${allure.version}</reportVersion>
+                    <reportVersion>${allure.commandline.version}</reportVersion>
                     <resultsDirectory>${project.build.directory}/allure-results</resultsDirectory>
                 </configuration>
             </plugin>
@@ -219,7 +224,7 @@
         <profile>
             <id>smoke</id>
             <properties>
-                <cucumber.tags>@smoke</cucumber.tags>
+                <cucumber.tags>@smoke and not @wip</cucumber.tags>
             </properties>
             <build>
                 <plugins>
@@ -239,7 +244,7 @@
         <profile>
             <id>regression</id>
             <properties>
-                <cucumber.tags>@regression</cucumber.tags>
+                <cucumber.tags>@regression and not @wip</cucumber.tags>
             </properties>
             <build>
                 <plugins>
@@ -259,7 +264,7 @@
         <profile>
             <id>advanced</id>
             <properties>
-                <cucumber.tags>@advanced</cucumber.tags>
+                <cucumber.tags>@advanced and not @wip</cucumber.tags>
             </properties>
             <build>
                 <plugins>

@@ -1,0 +1,13 @@
+# TestNG's ServiceLoader registration point.
+#
+# Every listener named here is attached to every suite in this project automatically. That is the
+# whole reason the file exists: a <listeners> block in a suite XML has to be copied into each new
+# suite, and the first time someone forgets, that suite quietly runs without retries, without
+# failure evidence and without Allure step detail - and still reports green.
+#
+# IAnnotationTransformer, ITestListener and ISuiteListener all extend ITestNGListener, so they
+# share this one file.
+
+com.adarsh.listeners.RetryTransformer
+com.adarsh.listeners.TestListener
+com.adarsh.listeners.BrowserParameterListener

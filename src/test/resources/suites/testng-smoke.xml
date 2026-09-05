@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE suite SYSTEM "https://testng.org/testng-1.0.dtd">
+
+<!--
+  Smoke suite - the pull-request gate.
+
+  Runs only SmokeRunner, whose @CucumberOptions filter is "@smoke and not @wip". This is the
+  shortest set of scenarios that proves the application is worth testing further; anything
+  slower belongs in testng-regression.xml.
+
+  Invoked by:  mvn test -Psmoke
+  which points Surefire at this file (see the <profile id="smoke"> block in pom.xml).
+-->
+<suite name="Smoke" verbose="1"
+       data-provider-thread-count="4"
+       configfailurepolicy="continue">
+
+    <!--
+      Parallelism note. Cucumber-TestNG does NOT parallelise through parallel="tests" or
+      parallel="methods". Every scenario arrives as one row from the @DataProvider(parallel = true)
+      override in BaseCucumberRunner, so the only knob that has any effect is
+      data-provider-thread-count above. Setting parallel="methods" here would look like it works
+      and change nothing.
+
+      Four threads is chosen to match a typical 4-vCPU CI runner. Each thread gets its own browser
+      via the ThreadLocal in DriverManager.
+
+      Overridable from the command line with -Ddataproviderthreadcount=N, which wins over the
+      value above - verified: -Ddataproviderthreadcount=1 against this suite produced a single
+      TestNG-PoolService thread where the default produced four. CI varies concurrency that way
+      rather than editing this file.
+    -->
+
+    <!--
+      No <listeners> element on purpose. Listeners are registered through
+      src/test/resources/META-INF/services/org.testng.ITestNGListener (Section 2) so that a suite
+      physically cannot forget them - a listener declared per-suite is one copy-paste away from
+      being dropped from the next suite someone adds.
+    -->
+
+    <test name="Smoke scenarios">
+        <classes>
+            <class name="com.adarsh.runners.SmokeRunner"/>
+        </classes>
+    </test>
+
+    <!--
+      The domain record unit tests (com.adarsh.domain.*Test) are deliberately absent. They are
+      pure, sub-second, and browserless; running them here would slow the gate without telling us
+      anything a compile does not. They run under a plain `mvn test` and inside
+      testng-regression.xml.
+    -->
+</suite>

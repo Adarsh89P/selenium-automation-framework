@@ -95,4 +95,23 @@ public interface FrameworkConfig extends Config {
     @Key("cloud.accesskey")
     @DefaultValue("")
     String cloudAccessKey();
+
+    // ===== Stability =====
+
+    /**
+     * How many times a failed scenario is retried before the failure stands. Two is the ceiling
+     * on purpose: a test that needs three attempts is not flaky, it is broken.
+     */
+    @Key("retry.max")
+    @DefaultValue("2")
+    int retryMax();
+
+    /**
+     * When true (the default) an {@code AssertionError} is never retried. A deterministic
+     * assertion failure does not heal on a second run - retrying it only buys a slower red build
+     * and, worse, occasionally turns a real intermittent product bug green.
+     */
+    @Key("retry.only.infrastructure.failures")
+    @DefaultValue("true")
+    boolean retryOnlyInfrastructureFailures();
 }

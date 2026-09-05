@@ -1,0 +1,219 @@
+### Two gates, deliberately different in cost.
+#
+# Pull requests get @smoke on one headless Chrome: fast enough that nobody routes around it.
+# The nightly run takes the full @regression suite across three browsers on a real Selenium Grid,
+# where slowness is acceptable and coverage is not.
+#
+# Every reporting step carries `if: always()`. A suite that fails and then uploads nothing is
+# worse than one that never ran: the evidence exists inside the runner, and losing it means the
+# failure has to be reproduced from scratch. `always()` is only ever attached to steps that
+# publish - never to a step that could mask a real failure.
+
+name: Selenium
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  schedule:
+    # 02:30 UTC = 08:00 IST. Late enough that the grid is idle, early enough that a red nightly
+    # is waiting when the team starts rather than discovered at lunchtime.
+    - cron: "30 2 * * *"
+  workflow_dispatch:
+    inputs:
+      tags:
+        description: "Cucumber tag expression"
+        required: false
+        default: "@regression and not @wip"
+      env:
+        description: "Target environment (dev | stage)"
+        required: false
+        default: "dev"
+
+# A second push to the same PR cancels the first: the earlier answer is about to be irrelevant and
+# a browser suite is expensive to leave running. The nightly is excluded - cancelling it would
+# leave a gap in the Allure history that never fills back in.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  MAVEN_ARGS: "-B -ntp"
+
+jobs:
+
+  # ===========================================================================
+  # PR gate: @smoke, one browser, no grid.
+  # ===========================================================================
+  smoke:
+    name: Smoke (chrome, headless)
+    if: github.event_name == 'pull_request' || github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 25
+        uses: actions/setup-java@v4
+        with:
+          java-version: "25"
+          distribution: temurin
+          # Caches ~/.m2 keyed on the pom. The AspectJ weaver that Surefire loads by absolute path
+          # out of the local repository has to be present before the tests start, so a cold cache
+          # is a correctness concern here and not only a speed one.
+          cache: maven
+
+      - name: Run smoke suite
+        # No Grid and no Docker: ubuntu-latest ships Chrome, and Selenium Manager resolves the
+        # driver. Standing up a grid to run one browser would add a minute to every pull request
+        # for nothing.
+        run: mvn $MAVEN_ARGS test -Psmoke -Dheadless=true -Dbrowser=chrome -Denv=dev
+        env:
+          APP_USERNAME: ${{ secrets.APP_USERNAME }}
+          APP_PASSWORD: ${{ secrets.APP_PASSWORD }}
+
+      - name: Upload failure evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-evidence
+          path: |
+            target/allure-results/
+            target/logs/
+            target/flaky-report.txt
+            target/cucumber-report.html
+          retention-days: 7
+          if-no-files-found: ignore
+
+  # ===========================================================================
+  # Nightly: full @regression, three browsers, real Grid.
+  # ===========================================================================
+  regression:
+    name: Regression (grid, chrome + firefox + edge)
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: write   # required only by the gh-pages publish step below
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 25
+        uses: actions/setup-java@v4
+        with:
+          java-version: "25"
+          distribution: temurin
+          cache: maven
+
+      - name: Start Selenium Grid
+        # --wait blocks until the hub is healthy and every node has registered. Without it the
+        # first scenarios fail with "Could not start a new session" during the window where a node
+        # answers its own health check but has not yet reached the hub - a failure that looks like
+        # a test bug and is not one.
+        run: docker compose up -d --wait
+
+      - name: Show grid status
+        run: curl -s http://localhost:4444/status | tee grid-status.json
+
+      - name: Run regression across three browsers
+        # parallel-grid.xml runs Chrome, Firefox and Edge concurrently against the one grid.
+        #
+        # A GitHub matrix with one browser per job was the alternative and was rejected: it would
+        # stand up three separate grids for the same scenarios, and it would split the results into
+        # three Allure reports that nobody correlates. The suite already parallelises across
+        # browsers, so the matrix would be paying three times for something already solved. The
+        # trade-off is honest - one job means a grid-level failure takes all three browsers with
+        # it, where a matrix would have kept two.
+        run: |
+          mvn $MAVEN_ARGS test \
+            -Dexecution=grid \
+            -Dgrid.url=http://localhost:4444/wd/hub \
+            -Denv=${{ github.event.inputs.env || 'dev' }} \
+            -Dcucumber.tags="${{ github.event.inputs.tags || '@regression and not @wip' }}" \
+            -Dsurefire.suiteXmlFiles=src/test/resources/suites/parallel-grid.xml
+        env:
+          APP_USERNAME: ${{ secrets.APP_USERNAME }}
+          APP_PASSWORD: ${{ secrets.APP_PASSWORD }}
+
+      - name: Collect grid logs
+        if: always()
+        run: |
+          mkdir -p target/grid-logs
+          docker compose logs --no-color > target/grid-logs/compose.log 2>&1 || true
+
+      - name: Stop Selenium Grid
+        if: always()
+        # Runs even when the suite failed, so the recorders flush their files before the volumes
+        # go away.
+        run: docker compose down -v || true
+
+      # ---- Reporting. Everything from here down is `if: always()`. ----
+
+      - name: Fetch the previously published report
+        id: history
+        if: always()
+        # The trend graph is the only part of an Allure report that says anything about the suite
+        # over time rather than about a single run. It lives in the previously published report, so
+        # it has to be pulled back in before the new report is generated - otherwise every night
+        # looks like the first night. A missing gh-pages branch is the normal first-run state, not
+        # an error, hence continue-on-error.
+        continue-on-error: true
+        uses: actions/checkout@v4
+        with:
+          ref: gh-pages
+          path: previous-report
+
+      - name: Carry the history forward
+        if: always() && steps.history.outcome == 'success'
+        run: |
+          mkdir -p target/allure-results/history
+          cp -r previous-report/history/. target/allure-results/history/ 2>/dev/null || true
+
+      - name: Generate Allure report
+        if: always()
+        run: mvn $MAVEN_ARGS allure:report
+
+      - name: Upload report and evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: regression-report
+          path: |
+            target/site/allure-maven-plugin/
+            target/allure-results/
+            target/logs/
+            target/grid-logs/
+            target/videos/
+            target/flaky-report.txt
+            grid-status.json
+          retention-days: 30
+          if-no-files-found: ignore
+
+      - name: Publish report to GitHub Pages
+        # Guarded on the branch rather than on success: a red nightly is exactly the run whose
+        # report someone needs to read. Restricting it to main keeps a workflow_dispatch from a
+        # feature branch from overwriting the published trend.
+        if: always() && github.ref == 'refs/heads/main' 
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: target/site/allure-maven-plugin
+          keep_files: false
+
+      - name: Flag flaky tests in the job summary
+        if: always()
+        # A retried-then-passed scenario leaves the build green. Surfacing it in the summary is
+        # what stops "green" and "trustworthy" from silently drifting apart.
+        run: |
+          if [ -s target/flaky-report.txt ]; then
+            {
+              echo "### Flaky tests in this run"
+              echo ""
+              echo "These passed only after a retry - green, but not trustworthy:"
+              echo ""
+              sed 's/^/- /' target/flaky-report.txt
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
