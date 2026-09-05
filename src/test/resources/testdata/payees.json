@@ -1,0 +1,22 @@
+[
+  {
+    "name": "City Power and Light",
+    "street": "742 Evergreen Terrace",
+    "city": "Springfield",
+    "state": "IL",
+    "zipCode": "62704",
+    "phoneNumber": "2175550143",
+    "accountNumber": "445566",
+    "amount": 45.00
+  },
+  {
+    "name": "Riverside Water Board",
+    "street": "18 Canal Street",
+    "city": "Riverside",
+    "state": "CA",
+    "zipCode": "92501",
+    "phoneNumber": "9515550198",
+    "accountNumber": "778899",
+    "amount": 12.50
+  }
+]

@@ -1,0 +1,37 @@
+# ===== Build output =====
+target/
+!.mvn/wrapper/maven-wrapper.jar
+
+# ===== Test artefacts =====
+allure-results/
+allure-report/
+.allure/
+screenshots/
+videos/
+logs/
+*.log
+healing-report.json
+test-output/
+
+# ===== Secrets / local environment =====
+.env
+.env.*
+*.pem
+*.key
+local.properties
+
+# ===== IDE =====
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+.settings/
+.project
+.classpath
+nbproject/
+
+# ===== OS =====
+.DS_Store
+Thumbs.db
+desktop.ini

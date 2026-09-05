@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Logging for a parallel suite.
+
+  The Routing appender keys on the "scenario" value that Hooks puts into the MDC, so every
+  scenario gets its own file under target/logs. Without that, concurrent scenarios interleave
+  into one file and a failure log becomes unreadable.
+-->
+<Configuration status="WARN" name="selenium-automation-framework">
+
+    <Properties>
+        <Property name="pattern">%d{HH:mm:ss.SSS} [%t] %-5level %logger{1.} - %msg%n</Property>
+        <Property name="logDir">target/logs</Property>
+    </Properties>
+
+    <Appenders>
+        <Console name="Console" target="SYSTEM_OUT">
+            <PatternLayout pattern="${pattern}"/>
+        </Console>
+
+        <!-- One rolling file for the whole run, for a quick chronological read. -->
+        <RollingFile name="RunLog"
+                     fileName="${logDir}/run.log"
+                     filePattern="${logDir}/run-%d{yyyy-MM-dd}-%i.log.gz">
+            <PatternLayout pattern="${pattern}"/>
+            <Policies>
+                <SizeBasedTriggeringPolicy size="10 MB"/>
+            </Policies>
+            <DefaultRolloverStrategy max="5"/>
+        </RollingFile>
+
+        <!-- One file per scenario, keyed by the MDC value the hooks set. -->
+        <Routing name="PerScenario">
+            <Routes pattern="$${ctx:scenario}">
+                <Route>
+                    <File name="ScenarioFile"
+                          fileName="${logDir}/scenarios/${ctx:scenario}.log"
+                          append="false">
+                        <PatternLayout pattern="${pattern}"/>
+                    </File>
+                </Route>
+                <!-- Anything logged outside a scenario (suite setup, driver creation). -->
+                <Route key="$${ctx:scenario}" ref="Console"/>
+            </Routes>
+        </Routing>
+    </Appenders>
+
+    <Loggers>
+        <Logger name="com.adarsh" level="DEBUG" additivity="false">
+            <AppenderRef ref="Console"/>
+            <AppenderRef ref="RunLog"/>
+            <AppenderRef ref="PerScenario"/>
+        </Logger>
+
+        <!-- Selenium's own logging is verbose enough to bury ours. -->
+        <Logger name="org.openqa.selenium" level="WARN"/>
+        <Logger name="org.apache.hc" level="WARN"/>
+
+        <Root level="INFO">
+            <AppenderRef ref="Console"/>
+            <AppenderRef ref="RunLog"/>
+        </Root>
+    </Loggers>
+</Configuration>

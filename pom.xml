@@ -1,0 +1,279 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>com.adarsh</groupId>
+    <artifactId>selenium-automation-framework</artifactId>
+    <version>1.0.0</version>
+    <packaging>jar</packaging>
+
+    <name>selenium-automation-framework</name>
+    <description>Selenium 4 + TestNG 7 + Cucumber 7 hybrid BDD framework on Java 25</description>
+
+    <properties>
+        <!-- ===== Build ===== -->
+        <maven.compiler.release>25</maven.compiler.release>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <!-- Test-only project: nothing to package, nothing to install or deploy. -->
+        <maven.install.skip>true</maven.install.skip>
+        <maven.deploy.skip>true</maven.deploy.skip>
+
+        <!-- ===== Library versions ===== -->
+        <selenium.version>4.48.0</selenium.version>
+        <testng.version>7.12.0</testng.version>
+        <cucumber.version>7.34.7</cucumber.version>
+        <allure.version>2.35.5</allure.version>
+        <aspectj.version>1.9.25.1</aspectj.version>
+        <log4j.version>2.26.1</log4j.version>
+        <jackson.version>2.22.2</jackson.version>
+        <poi.version>5.5.1</poi.version>
+        <owner.version>1.0.12</owner.version>
+        <datafaker.version>2.7.0</datafaker.version>
+        <assertj.version>3.27.7</assertj.version>
+
+        <!-- ===== Plugin versions ===== -->
+        <compiler.plugin.version>3.16.0</compiler.plugin.version>
+        <surefire.plugin.version>3.5.6</surefire.plugin.version>
+        <allure.maven.version>3.0.3</allure.maven.version>
+
+        <!-- ===== Runtime switches: override with -D on the command line ===== -->
+        <browser>chrome</browser>
+        <execution.target>local</execution.target>
+        <env>dev</env>
+        <headless>true</headless>
+        <threads>4</threads>
+        <cucumber.tags>@smoke</cucumber.tags>
+    </properties>
+
+    <dependencies>
+        <!-- Selenium 4: Selenium Manager resolves drivers. No binaries, no WebDriverManager. -->
+        <dependency>
+            <groupId>org.seleniumhq.selenium</groupId>
+            <artifactId>selenium-java</artifactId>
+            <version>${selenium.version}</version>
+            <scope>test</scope>
+        </dependency>
+
+        <!-- TestNG 7 is the only runner: JUnit 4 and JUnit 5 are deliberately absent. -->
+        <dependency>
+            <groupId>org.testng</groupId>
+            <artifactId>testng</artifactId>
+            <version>${testng.version}</version>
+            <scope>test</scope>
+        </dependency>
+
+        <!-- Cucumber 7 driven by TestNG, so BDD and non-BDD tests share one lifecycle. -->
+        <dependency>
+            <groupId>io.cucumber</groupId>
+            <artifactId>cucumber-java</artifactId>
+            <version>${cucumber.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.cucumber</groupId>
+            <artifactId>cucumber-testng</artifactId>
+            <version>${cucumber.version}</version>
+            <scope>test</scope>
+        </dependency>
+
+        <!-- AssertJ: fluent assertions whose failure messages name the business fact that broke,
+             plus SoftAssertions for multi-field validation checks. -->
+        <dependency>
+            <groupId>org.assertj</groupId>
+            <artifactId>assertj-core</artifactId>
+            <version>${assertj.version}</version>
+            <scope>test</scope>
+        </dependency>
+
+        <!-- Allure reporting -->
+        <dependency>
+            <groupId>io.qameta.allure</groupId>
+            <artifactId>allure-testng</artifactId>
+            <version>${allure.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.qameta.allure</groupId>
+            <artifactId>allure-cucumber7-jvm</artifactId>
+            <version>${allure.version}</version>
+            <scope>test</scope>
+        </dependency>
+
+        <!-- log4j2 as the SLF4J backend, so Selenium's own logging lands in our files too. -->
+        <dependency>
+            <groupId>org.apache.logging.log4j</groupId>
+            <artifactId>log4j-core</artifactId>
+            <version>${log4j.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.logging.log4j</groupId>
+            <artifactId>log4j-slf4j2-impl</artifactId>
+            <version>${log4j.version}</version>
+            <scope>test</scope>
+        </dependency>
+
+        <!-- Typed config binding (Owner) -->
+        <dependency>
+            <groupId>org.aeonbits.owner</groupId>
+            <artifactId>owner</artifactId>
+            <version>${owner.version}</version>
+            <scope>test</scope>
+        </dependency>
+
+        <!-- Test data: JSON, Excel, and generated values -->
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
+            <version>${jackson.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.poi</groupId>
+            <artifactId>poi-ooxml</artifactId>
+            <version>${poi.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>net.datafaker</groupId>
+            <artifactId>datafaker</artifactId>
+            <version>${datafaker.version}</version>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <version>${compiler.plugin.version}</version>
+                <configuration>
+                    <release>${maven.compiler.release}</release>
+                    <compilerArgs>
+                        <arg>-parameters</arg>
+                    </compilerArgs>
+                </configuration>
+            </plugin>
+
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <version>${surefire.plugin.version}</version>
+                <configuration>
+                    <!-- Cucumber entry points are named *Runner, which Surefire's default
+                         includes (*Test, Test*, *Tests) would silently skip. -->
+                    <includes>
+                        <include>**/*Runner.java</include>
+                        <include>**/*Test.java</include>
+                    </includes>
+                    <!-- AspectJ weaver lets Allure intercept @Step and @Attachment. -->
+                    <argLine>-javaagent:${settings.localRepository}/org/aspectj/aspectjweaver/${aspectj.version}/aspectjweaver-${aspectj.version}.jar</argLine>
+                    <systemPropertyVariables>
+                        <browser>${browser}</browser>
+                        <execution>${execution.target}</execution>
+                        <env>${env}</env>
+                        <headless>${headless}</headless>
+                        <cucumber.filter.tags>${cucumber.tags}</cucumber.filter.tags>
+                        <allure.results.directory>${project.build.directory}/allure-results</allure.results.directory>
+                        <!-- log4j2.xml lives under config/, not at the classpath root, so it has
+                             to be pointed at explicitly. -->
+                        <log4j2.configurationFile>config/log4j2.xml</log4j2.configurationFile>
+                    </systemPropertyVariables>
+                </configuration>
+                <dependencies>
+                    <!-- Pin the classic TestNG provider. Surefire 3.6 otherwise defaults to the
+                         JUnit Platform provider plus testng-engine, which resolves @DataProvider
+                         at discovery time - before Cucumber's @BeforeClass has built the scenario
+                         list - so every suite silently runs zero scenarios and still goes green. -->
+                    <dependency>
+                        <groupId>org.apache.maven.surefire</groupId>
+                        <artifactId>surefire-testng</artifactId>
+                        <version>${surefire.plugin.version}</version>
+                    </dependency>
+                    <dependency>
+                        <groupId>org.aspectj</groupId>
+                        <artifactId>aspectjweaver</artifactId>
+                        <version>${aspectj.version}</version>
+                    </dependency>
+                </dependencies>
+            </plugin>
+
+            <plugin>
+                <groupId>io.qameta.allure</groupId>
+                <artifactId>allure-maven</artifactId>
+                <version>${allure.maven.version}</version>
+                <configuration>
+                    <reportVersion>${allure.version}</reportVersion>
+                    <resultsDirectory>${project.build.directory}/allure-results</resultsDirectory>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+
+    <profiles>
+        <!-- Suite selection: mvn test -Psmoke | -Pregression | -Padvanced.
+             The referenced suite XMLs are created in Section 5. -->
+        <profile>
+            <id>smoke</id>
+            <properties>
+                <cucumber.tags>@smoke</cucumber.tags>
+            </properties>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-surefire-plugin</artifactId>
+                        <configuration>
+                            <suiteXmlFiles>
+                                <suiteXmlFile>src/test/resources/suites/testng-smoke.xml</suiteXmlFile>
+                            </suiteXmlFiles>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+
+        <profile>
+            <id>regression</id>
+            <properties>
+                <cucumber.tags>@regression</cucumber.tags>
+            </properties>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-surefire-plugin</artifactId>
+                        <configuration>
+                            <suiteXmlFiles>
+                                <suiteXmlFile>src/test/resources/suites/testng-regression.xml</suiteXmlFile>
+                            </suiteXmlFiles>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+
+        <profile>
+            <id>advanced</id>
+            <properties>
+                <cucumber.tags>@advanced</cucumber.tags>
+            </properties>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-surefire-plugin</artifactId>
+                        <configuration>
+                            <suiteXmlFiles>
+                                <suiteXmlFile>src/test/resources/suites/testng-advanced.xml</suiteXmlFile>
+                            </suiteXmlFiles>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
+</project>
