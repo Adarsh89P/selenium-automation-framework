@@ -34,7 +34,21 @@
         <packages>
             <package name="com.adarsh.domain"/>
             <package name="com.adarsh.core"/>
+            <package name="com.adarsh.utils"/>
         </packages>
+
+        <!--
+          Every package holding unit tests must be listed above. A wildcard (com.adarsh.*) would
+          remove that maintenance burden but is wrong here: it would also scan com.adarsh.runners,
+          whose classes inherit an @Test method from AbstractTestNGCucumberTests, and the whole
+          Cucumber suite would run a second time inside this block.
+
+          The failure mode when a package is forgotten is silent. Suite XMLs ignore Surefire's
+          <includes>, so a test class that is in no <packages> entry simply never runs under
+          -Psmoke, -Pregression or -Padvanced - which is every path CI takes - while still passing
+          locally under a bare `mvn test`. com.adarsh.utils was missing here for exactly that
+          reason: 29 assertions that looked like coverage and were never executed by a gate.
+        -->
     </test>
 
     <test name="Regression scenarios">

@@ -25,6 +25,7 @@
         <testng.version>7.12.0</testng.version>
         <cucumber.version>7.34.7</cucumber.version>
         <allure.version>2.35.5</allure.version>
+        <extent.cucumber.adapter.version>1.14.0</extent.cucumber.adapter.version>
         <!-- The Allure CLI is versioned independently of the Java libraries and their numbers do
              not line up: allure-commandline has no 2.35.5. Pointing <reportVersion> at
              ${allure.version} therefore fails report generation with "Cannot resolve allure
@@ -80,6 +81,14 @@
             <groupId>io.cucumber</groupId>
             <artifactId>cucumber-testng</artifactId>
             <version>${cucumber.version}</version>
+            <scope>test</scope>
+        </dependency>
+
+        <!-- Extent HTML reporting for Cucumber scenarios. -->
+        <dependency>
+            <groupId>tech.grasshopper</groupId>
+            <artifactId>extentreports-cucumber7-adapter</artifactId>
+            <version>${extent.cucumber.adapter.version}</version>
             <scope>test</scope>
         </dependency>
 
